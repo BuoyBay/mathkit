@@ -1,0 +1,425 @@
+Public Enum RoundingMode As Integer
+    ToEven
+    AwayFromZero
+    TowardZero
+    TowardNegativeInfinity
+    TowardPositiveInfinity
+End Enum
+
+''' Scalar numerical helpers. Invalid domains throw InvalidArgumentException; checked integer overflow and scaled-rounding overflow throw OverflowException; integer zero divisors throw DivideByZeroException.
+Public Class Numeric
+    Public Shared Function Epsilon() As Double
+        Return 2.220446049250313e-16
+    End Function
+    Public Shared Function MaxValue() As Double
+        Return 1.7976931348623157e308
+    End Function
+    Public Shared Function MinNormal() As Double
+        Return 2.2250738585072014e-308
+    End Function
+    Public Shared Function MinSubnormal() As Double
+        Return 4.9406564584124654e-324
+    End Function
+    Public Shared Function Tau() As Double
+        Return 6.2831853071795864769
+    End Function
+    Public Shared Function IsNaN(x As Double) As Boolean
+        Return x <> x
+    End Function
+    Public Shared Function IsFinite(x As Double) As Boolean
+        Return x <= Numeric.MaxValue() And x >= -Numeric.MaxValue()
+    End Function
+    Public Shared Function IsInfinity(x As Double) As Boolean
+        Return x = Double.Infinity Or x = -Double.Infinity
+    End Function
+    Public Shared Function IsInteger(x As Double) As Boolean
+        Return Numeric.IsFinite(x) And Math.Floor(x) = x
+    End Function
+    Public Shared Function IsSafeInteger(x As Double) As Boolean
+        Return Numeric.IsInteger(x) And Math.Abs(x) <= 9007199254740991.0
+    End Function
+    Public Shared Function IsNegativeZero(x As Double) As Boolean
+        If x <> 0.0 Then Return False
+        Return 1.0 / x = -Double.Infinity
+    End Function
+    Public Shared Function CopySign(magnitude As Double, sign As Double) As Double
+        If Numeric.IsNaN(sign) Then Throw New InvalidArgumentException("NaN sign is unsupported")
+        Dim a As Double = Math.Abs(magnitude)
+        If sign < 0.0 Or Numeric.IsNegativeZero(sign) Then Return -a
+        Return a
+    End Function
+    Private Shared Sub Finite(x As Double)
+        If Not Numeric.IsFinite(x) Then Throw New InvalidArgumentException("Expected finite value")
+    End Sub
+    Private Shared Sub Overflow()
+        Throw New OverflowException("Integer answer out of range")
+    End Sub
+    Public Shared Function IsClose(a As Double, b As Double, relativeTolerance As Double = 1.0e-9, absoluteTolerance As Double = 0.0) As Boolean
+        Numeric.Finite(relativeTolerance)
+        Numeric.Finite(absoluteTolerance)
+        If relativeTolerance < 0.0 Or absoluteTolerance < 0.0 Then Throw New InvalidArgumentException("Negative tolerance")
+        If Numeric.IsNaN(a) Or Numeric.IsNaN(b) Then Return False
+        If a = b Then Return True
+        If Not Numeric.IsFinite(a) Or Not Numeric.IsFinite(b) Then Return False
+        Dim scale As Double = Math.Max(Math.Abs(a), Math.Abs(b))
+        Dim difference As Double = Math.Abs(a - b)
+        If difference <= absoluteTolerance Then Return True
+        If relativeTolerance <= 1.0 Then Return difference <= relativeTolerance * scale
+        If Numeric.IsFinite(difference) Then Return difference / scale <= relativeTolerance
+        Return Math.Abs(a / scale - b / scale) <= relativeTolerance
+    End Function
+    Public Shared Function Clamp(x As Double, lo As Double, hi As Double) As Double
+        If Numeric.IsNaN(lo) Or Numeric.IsNaN(hi) Or lo > hi Then Throw New InvalidArgumentException("Invalid bounds")
+        If x < lo Then Return lo
+        If x > hi Then Return hi
+        Return x
+    End Function
+    Public Shared Function ClampInteger(x As Integer, lo As Integer, hi As Integer) As Integer
+        If lo > hi Then Throw New InvalidArgumentException("Invalid bounds")
+        If x < lo Then Return lo
+        If x > hi Then Return hi
+        Return x
+    End Function
+    Public Shared Function Lerp(a As Double, b As Double, t As Double) As Double
+        Numeric.Finite(a)
+        Numeric.Finite(b)
+        Numeric.Finite(t)
+        If t = 0.0 Then Return a
+        If t = 1.0 Then Return b
+        If (a <= 0.0 And b >= 0.0) Or (a >= 0.0 And b <= 0.0) Then Return (1.0 - t) * a + t * b
+        If t > 0.5 And t < 1.0 Then Return b + (1.0 - t) * (a - b)
+        Return a + t * (b - a)
+    End Function
+    Public Shared Function InverseLerp(a As Double, b As Double, x As Double) As Double
+        Numeric.Finite(a)
+        Numeric.Finite(b)
+        Numeric.Finite(x)
+        If a = b Then Throw New InvalidArgumentException("Equal endpoints")
+        Dim d As Double = b - a
+        Dim n As Double = x - a
+        If Numeric.IsFinite(d) And Numeric.IsFinite(n) Then Return n / d
+        Dim scale As Double = Math.Max(Math.Abs(a), Math.Max(Math.Abs(b), Math.Abs(x)))
+        Return (x / scale - a / scale) / (b / scale - a / scale)
+    End Function
+    Public Shared Function Degrees(x As Double) As Double
+        Return x * (180.0 / Math.Pi)
+    End Function
+    Public Shared Function Radians(x As Double) As Double
+        Return x * (Math.Pi / 180.0)
+    End Function
+    Public Shared Function Truncate(x As Double) As Double
+        If x = 0.0 Then Return x
+        If x < 0.0 Then Return Math.Ceiling(x)
+        Return Math.Floor(x)
+    End Function
+    Public Shared Function RoundEven(x As Double) As Double
+        If Not Numeric.IsFinite(x) Or Math.Abs(x) >= 4503599627370496.0 Or x = 0.0 Then Return x
+        Dim a As Double = Math.Abs(x)
+        Dim n As Double = Math.Floor(a)
+        Dim f As Double = a - n
+        If f > 0.5 Or (f = 0.5 And n - 2.0 * Math.Floor(n / 2.0) <> 0.0) Then n += 1.0
+        Return Numeric.CopySign(n, x)
+    End Function
+    Public Shared Function RoundAwayFromZero(x As Double) As Double
+        If Not Numeric.IsFinite(x) Or Math.Abs(x) >= 4503599627370496.0 Or x = 0.0 Then Return x
+        Dim a As Double = Math.Abs(x)
+        Dim n As Double = Math.Floor(a)
+        If a - n >= 0.5 Then n += 1.0
+        Return Numeric.CopySign(n, x)
+    End Function
+    Public Shared Function RoundDigits(x As Double, digits As Integer, mode As RoundingMode = RoundingMode.ToEven) As Double
+        If digits < -308 Or digits > 308 Then Throw New InvalidArgumentException("Digits outside -308..308")
+        Dim modeNumber As Integer = CType(mode, Integer)
+        If modeNumber < 0 Or modeNumber > 4 Then Throw New InvalidArgumentException("Unknown rounding mode")
+        If Not Numeric.IsFinite(x) Or x = 0.0 Then Return x
+        Dim factor As Double = Math.Pow(10.0, (1.0 * digits))
+        ' Scaling an already integral binary64 value can lose low bits. Once
+        ' the scaled spacing is at least one, decimal rounding cannot improve
+        ' its representable precision; retain the original value instead.
+        If digits >= 0 And Math.Abs(x) >= 4503599627370496.0 / factor Then Return x
+        Dim scaled As Double = x * factor
+        If Numeric.IsFinite(x) And Not Numeric.IsFinite(scaled) Then Throw New OverflowException("Scaled rounding overflow")
+        Select Case mode
+            Case RoundingMode.ToEven
+                scaled = Numeric.RoundEven(scaled)
+            Case RoundingMode.AwayFromZero
+                scaled = Numeric.RoundAwayFromZero(scaled)
+            Case RoundingMode.TowardZero
+                scaled = Numeric.Truncate(scaled)
+            Case RoundingMode.TowardNegativeInfinity
+                scaled = Math.Floor(scaled)
+            Case RoundingMode.TowardPositiveInfinity
+                scaled = Math.Ceiling(scaled)
+            Case Else
+                Throw New InvalidArgumentException("Unknown rounding mode")
+        End Select
+        Return scaled / factor
+    End Function
+    Public Shared Function CheckedAdd(a As Integer, b As Integer) As Integer
+        If b > 0 Then
+            If a > Integer.MaxValue - b Then Numeric.Overflow()
+        ElseIf b < 0 Then
+            If a < Integer.MinValue - b Then Numeric.Overflow()
+        End If
+        Return a + b
+    End Function
+    Public Shared Function CheckedSubtract(a As Integer, b As Integer) As Integer
+        If b > 0 Then
+            If a < Integer.MinValue + b Then Numeric.Overflow()
+        ElseIf b < 0 Then
+            If a > Integer.MaxValue + b Then Numeric.Overflow()
+        End If
+        Return a - b
+    End Function
+    Public Shared Function CheckedNegate(a As Integer) As Integer
+        If a = Integer.MinValue Then Numeric.Overflow()
+        Return -a
+    End Function
+    Public Shared Function CheckedAbs(a As Integer) As Integer
+        If a < 0 Then Return Numeric.CheckedNegate(a)
+        Return a
+    End Function
+    Public Shared Function CheckedMultiply(a As Integer, b As Integer) As Integer
+        If a = 0 Or b = 0 Then Return 0
+        If a > 0 Then
+            If b > 0 Then
+                If a > Integer.MaxValue \ b Then Numeric.Overflow()
+            Else
+                If b < Integer.MinValue \ a Then Numeric.Overflow()
+            End If
+        Else
+            If b > 0 Then
+                If a < Integer.MinValue \ b Then Numeric.Overflow()
+            Else
+                If a < Integer.MaxValue \ b Then Numeric.Overflow()
+            End If
+        End If
+        Return a * b
+    End Function
+    Public Shared Function CheckedPower(a As Integer, exponent As Integer) As Integer
+        If exponent < 0 Then Throw New InvalidArgumentException("Negative integer exponent")
+        Dim answer As Integer = 1
+        Dim n As Integer = exponent
+        Dim base As Integer = a
+        While n > 0
+            If n Mod 2 <> 0 Then answer = Numeric.CheckedMultiply(answer, base)
+            n = n \ 2
+            If n > 0 Then base = Numeric.CheckedMultiply(base, base)
+        End While
+        Return answer
+    End Function
+    Public Shared Function Gcd(a As Integer, b As Integer) As Integer
+        ' Negative magnitudes represent MinValue safely.
+        If a > 0 Then a = -a
+        If b > 0 Then b = -b
+        While b <> 0
+            If b = -1 Then Return 1
+            Dim r As Integer = a Mod b
+            a = b
+            b = r
+        End While
+        Return Numeric.CheckedNegate(a)
+    End Function
+    Public Shared Function Lcm(a As Integer, b As Integer) As Integer
+        If a = 0 Or b = 0 Then Return 0
+        Return Numeric.CheckedAbs(Numeric.CheckedMultiply(a \ Numeric.Gcd(a, b), b))
+    End Function
+    Public Shared Function IntegerSqrt(n As Integer) As Integer
+        If n < 0 Then Throw New InvalidArgumentException("Negative square root")
+        Dim lo As Integer = 0
+        Dim hi As Integer = 3037000500
+        While hi - lo > 1
+            Dim mid As Integer = lo + (hi - lo) \ 2
+            If mid <= n \ mid Then
+                lo = mid
+            Else
+                hi = mid
+            End If
+        End While
+        Return lo
+    End Function
+    Public Shared Function Factorial(n As Integer) As Integer
+        If n < 0 Then Throw New InvalidArgumentException("Negative factorial")
+        If n > 20 Then Numeric.Overflow()
+        Dim answer As Integer = 1
+        For i As Integer = 2 To n
+            answer = Numeric.CheckedMultiply(answer, i)
+        Next
+        Return answer
+    End Function
+    Public Shared Function Binomial(n As Integer, k As Integer) As Integer
+        If n < 0 Or k < 0 Or k > n Then Throw New InvalidArgumentException("Invalid binomial arguments")
+        If k > n - k Then k = n - k
+        Dim answer As Integer = 1
+        For i As Integer = 1 To k
+            Dim numerator As Integer = n - k + i
+            Dim denominator As Integer = i
+            Dim g As Integer = Numeric.Gcd(numerator, denominator)
+            numerator = numerator \ g
+            denominator = denominator \ g
+            answer = Numeric.CheckedMultiply(answer \ denominator, numerator)
+        Next
+        Return answer
+    End Function
+    Public Shared Function FloorDiv(a As Integer, b As Integer) As Integer
+        If b = 0 Then Throw New DivideByZeroException("Zero divisor")
+        If a = Integer.MinValue And b = -1 Then Numeric.Overflow()
+        Dim q As Integer = a \ b
+        Dim r As Integer = a Mod b
+        If r <> 0 And ((a < 0) <> (b < 0)) Then q -= 1
+        Return q
+    End Function
+    Public Shared Function EuclideanMod(a As Integer, b As Integer) As Integer
+        If b = 0 Then Throw New DivideByZeroException("Zero divisor")
+        If b = -1 Then Return 0
+        Dim r As Integer = a Mod b
+        If r < 0 Then
+            If b < 0 Then Return r - b
+            Return r + b
+        End If
+        Return r
+    End Function
+    Public Shared Function Hypot(a As Double, b As Double) As Double
+        Return Numeric.Hypot3(a, b, 0.0)
+    End Function
+    Public Shared Function Hypot3(a As Double, b As Double, c As Double) As Double
+        If Numeric.IsInfinity(a) Or Numeric.IsInfinity(b) Or Numeric.IsInfinity(c) Then Return Double.Infinity
+        If Numeric.IsNaN(a) Or Numeric.IsNaN(b) Or Numeric.IsNaN(c) Then Return Double.NaN
+        Dim s As Double = Math.Max(Math.Abs(a), Math.Max(Math.Abs(b), Math.Abs(c)))
+        If s = 0.0 Then Return 0.0
+        a = a / s
+        b = b / s
+        c = c / s
+        Return s * Math.Sqrt(a * a + b * b + c * c)
+    End Function
+    Public Shared Function Log1p(x As Double) As Double
+        If Numeric.IsNaN(x) Then Return x
+        If x < -1.0 Then Throw New InvalidArgumentException("Log1p domain")
+        If x = -1.0 Then Return -Double.Infinity
+        If x = Double.Infinity Or x = 0.0 Then Return x
+        Dim u As Double = 1.0 + x
+        If u = 1.0 Then Return x
+        Return Math.Log(u) * (x / (u - 1.0))
+    End Function
+    Public Shared Function Expm1(x As Double) As Double
+        If x = 0.0 Then Return x
+        If Math.Abs(x) > 0.5 Or Not Numeric.IsFinite(x) Then Return Math.Exp(x) - 1.0
+        Dim term As Double = x
+        Dim answer As Double = x
+        For i As Integer = 2 To 40
+            term = term * (x / (1.0 * i))
+            Dim nextValue As Double = answer + term
+            If nextValue = answer Then Return answer
+            answer = nextValue
+        Next
+        Return answer
+    End Function
+    Public Shared Function Cbrt(x As Double) As Double
+        If x = 0.0 Or Not Numeric.IsFinite(x) Then Return x
+        Dim a As Double = Math.Abs(x)
+        Dim y As Double = Math.Exp(Math.Log(a) / 3.0)
+        For i As Integer = 1 To 4
+            y = (2.0 * y + (a / y) / y) / 3.0
+        Next
+        Return Numeric.CopySign(y, x)
+    End Function
+    Public Shared Function Exp2(x As Double) As Double
+        If Numeric.IsNaN(x) Then Return x
+        If x >= 1024.0 Then Return Double.Infinity
+        If x <= -1075.0 Then Return 0.0
+        Dim exponent As Integer = Math.Floor(x)
+        Dim fraction As Double = x - exponent
+        Dim answer As Double = Math.Exp(fraction * 0.6931471805599453)
+        ' Exact powers of two avoid the optimizer's unavailable exp2 import.
+        ' Stop at the minimum normal before the single subnormal rounding.
+        Dim normalExponent As Integer = exponent
+        If normalExponent < -1022 Then normalExponent = -1022
+        If normalExponent > 0 Then
+            For i As Integer = 1 To normalExponent
+                answer *= 2.0
+            Next
+        Else
+            For i As Integer = 1 To -normalExponent
+                answer *= 0.5
+            Next
+        End If
+        Dim tail As Double = 1.0
+        For i As Integer = exponent To normalExponent - 1
+            tail *= 0.5
+        Next
+        Return answer * tail
+    End Function
+    Public Shared Function Asinh(x As Double) As Double
+        If x = 0.0 Or Not Numeric.IsFinite(x) Then Return x
+        Dim a As Double = Math.Abs(x)
+        Dim y As Double
+        If a > 1.0e154 Then
+            y = Math.Log(a) + 0.6931471805599453
+        Else
+            y = Numeric.Log1p(a + a * (a / (1.0 + Numeric.Hypot(a, 1.0))))
+        End If
+        Return Numeric.CopySign(y, x)
+    End Function
+    Public Shared Function Acosh(x As Double) As Double
+        If Numeric.IsNaN(x) Then Return x
+        If x < 1.0 Then Throw New InvalidArgumentException("Acosh domain")
+        If x > 1.0e154 Then Return Math.Log(x) + 0.6931471805599453
+        Return Numeric.Log1p((x - 1.0) + Math.Sqrt(x - 1.0) * Math.Sqrt(x + 1.0))
+    End Function
+    Public Shared Function Atanh(x As Double) As Double
+        If Numeric.IsNaN(x) Or x = 0.0 Then Return x
+        Dim a As Double = Math.Abs(x)
+        If a > 1.0 Then Throw New InvalidArgumentException("Atanh domain")
+        If a = 1.0 Then Return Numeric.CopySign(Double.Infinity, x)
+        Return Numeric.CopySign(0.5 * Numeric.Log1p(2.0 * a / (1.0 - a)), x)
+    End Function
+    Public Shared Function LogAddExp(a As Double, b As Double) As Double
+        If Numeric.IsNaN(a) Or Numeric.IsNaN(b) Then Return Double.NaN
+        If a = Double.Infinity Or b = Double.Infinity Then Return Double.Infinity
+        If a = -Double.Infinity Then Return b
+        If b = -Double.Infinity Then Return a
+        Return Math.Max(a, b) + Numeric.Log1p(Math.Exp(-Math.Abs(a - b)))
+    End Function
+    Public Shared Function LogSumExp(values As Array Of Double) As Double
+        Dim maximum As Double = -Double.Infinity
+        For Each x As Double In values
+            If Numeric.IsNaN(x) Then Return Double.NaN
+            If x > maximum Then maximum = x
+        Next
+        If Numeric.IsInfinity(maximum) Then Return maximum
+        Dim total As Double = 0.0
+        Dim correction As Double = 0.0
+        Dim skippedMaximum As Boolean = False
+        For Each x As Double In values
+            If x = maximum And Not skippedMaximum Then
+                skippedMaximum = True
+                Continue For
+            End If
+            Dim term As Double = Math.Exp(x - maximum) - correction
+            Dim nextValue As Double = total + term
+            correction = (nextValue - total) - term
+            total = nextValue
+        Next
+        Return maximum + Numeric.Log1p(total)
+    End Function
+    Public Shared Function Linspace(a As Double, b As Double, count As Integer) As Array Of Double
+        Numeric.Finite(a)
+        Numeric.Finite(b)
+        If count < 0 Then Throw New InvalidArgumentException("Negative count")
+        Dim values As Array Of Double = []
+        If count = 0 Then Return values
+        Array.Append(values, a)
+        For i As Integer = 1 To count - 1
+            Array.Append(values, Numeric.Lerp(a, b, (1.0 * i) / (1.0 * (count - 1))))
+        Next
+        Return values
+    End Function
+    Public Shared Function Horner(coefficients As Array Of Double, x As Double) As Double
+        If Array.Count(coefficients) = 0 Then Return 0.0
+        Dim answer As Double = coefficients(0)
+        For i As Integer = 1 To Array.Count(coefficients) - 1
+            answer = answer * x + coefficients(i)
+        Next
+        Return answer
+    End Function
+End Class
