@@ -19,5 +19,3 @@ For a standalone consumer, copy `main.bui` into a fresh directory and place
 or services are required.
 
 The first output is `7219428434016265740`; the remaining lines demonstrate floating-point formatting and rounding.
-
-Maintainers run the private validation suite before release. See the repository README for public build instructions.

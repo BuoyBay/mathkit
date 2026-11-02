@@ -1,7 +1,7 @@
 # Checked integer arithmetic and stable scalar helpers
 
-Import `mathkit`; all operations are `Numeric` Shared functions. Pure Buoy,
-no FFI or package dependencies. Integer operations use signed 64-bit values.
+Import `mathkit`; all operations are `Numeric` Shared functions. No FFI
+or package dependencies. Integer operations use signed 64-bit values.
 
 ## Install
 
@@ -45,8 +45,6 @@ On your own machine, install Buoy and run:
 ```sh
 buoy ai init --both
 ```
-
-The generated agent files and editor settings stay local and are ignored by Git.
 
 ## Contributing
 

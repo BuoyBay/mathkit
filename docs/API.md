@@ -69,23 +69,4 @@ and scaled-rounding overflow throw `OverflowException`. Integer zero divisors th
 `DivideByZeroException`.
 No Fma is supplied. No correctly-rounded, universal ulp bound, mathematical
 conformance, or non-Linux runtime guarantee is claimed. Native Math functions
-and compiler floating-point behavior remain dependencies. See the verifier's
-retained JSON for measured errors against high-precision Python Decimal
-oracles and the exact coverage of six-target semantic checks.
-
-## Use and verification
-
-Maintainers run the private validation suite before release. See the repository README for public build instructions.
-
-## Observed validation
-
-The Linux x86-64 corpus covers 1,909 integer cases, 474 real cases, 100
-closeness comparisons, 11 real-domain rejection cases and standalone boundary
-assertions. Against 800-digit Decimal references rounded to binary64, maximum
-observed errors were 3 ulps for Expm1, 1 ulp for Log1p/Cbrt/Asinh/Atanh/Acosh/
-Hypot/Exp2/LogAddExp, and 0 ulps for the sampled Hypot3/LogSumExp/rounding
-cases. These finite-sample observations are not general error bounds.
-Independent review and non-Linux native execution are not included here.
-
-
-A separate independent review corpus observed up to 4 ulps for Expm1, 2 for several scaled helpers, and 7 for a cancellation-sensitive LogSumExp case. Those measurements are corpus-specific, not uniform accuracy bounds. The local review corrections use endpoint-oriented interpolation for same-sign values near t=1 and a pure-Buoy Exp2 path tested at -O0/-O2.
+and compiler floating-point behavior remain dependencies.
