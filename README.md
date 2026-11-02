@@ -1,4 +1,4 @@
-# Checked integer arithmetic and stable scalar helpers
+# Checked integer arithmetic and stable scalars
 
 Import `mathkit`; all operations are `Numeric` Shared functions. No FFI
 or package dependencies. Integer operations use signed 64-bit values.
@@ -16,7 +16,7 @@ consumer project for reproducible installs.
 
 ## Example
 
-```buoy
+```basic
 Import mathkit
 Sub Main()
     Print Numeric.Binomial(66, 33)
