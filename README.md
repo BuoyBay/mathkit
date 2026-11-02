@@ -1,4 +1,4 @@
-# Checked integer arithmetic and stable scalars
+# Checked integer math
 
 Import `mathkit`; all operations are `Numeric` Shared functions. No FFI
 or package dependencies. Integer operations use signed 64-bit values.
